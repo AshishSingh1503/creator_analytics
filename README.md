@@ -1,150 +1,197 @@
-# TikTok Analytics
+# Creator Analytics Platform
 
-End-to-end TikTok analytics pipeline:
+Multi-Platform Video Intelligence Dashboard for **YouTube + TikTok + Instagram**.
 
-`[Auth Done] -> [Store Tokens] -> [Scheduler (Daily)] -> [Refresh Token] -> [Fetch Video List] -> [Fetch Analytics] -> [Store Data] -> [Process Metrics] -> [Dashboard + Alerts]`
+## Overview
 
-## Full Workflow
+Creator Analytics Platform is a scalable web-based analytics system for creators and agencies to track, analyze, and optimize content performance across short-form and long-form video platforms.
 
-1. **Auth Done**
-   Run OAuth once to get `access_token` + `refresh_token`.
+It aggregates platform data from:
+- YouTube Data API v3
+- YouTube Analytics API
+- TikTok for Developers API
+- Instagram Graph API
 
-2. **Store Tokens**
-   Tokens are stored in `tiktok_tokens.json` and synced into SQLite `tokens` table.
+The platform provides a single dashboard for video performance, audience behavior, and growth trends.
 
-3. **Scheduler (Daily)**
-   Scheduler runs pipeline every day at `TIKTOK_SCHEDULE_TIME`.
+## Problem Statement
 
-4. **Refresh Token**
-   Before API calls, access token is refreshed automatically when near expiry.
+Today, creators and teams often:
+- Manually switch between multiple platform dashboards
+- Lack unified cross-platform insights
+- Struggle to identify which content performs best
+- Spend significant time collecting and comparing analytics
 
-5. **Fetch Video List**
-   Pull videos using TikTok list endpoint with pagination.
+This platform automates that workflow and surfaces actionable insights in one place.
 
-6. **Fetch Analytics**
-   Pull detailed stats (views/likes/comments/shares) using query endpoint.
+## Key Features
 
-7. **Store Data**
-   Save normalized data into SQLite (`videos`, `video_analytics`, `pipeline_runs`).
+### Unified Dashboard
+- Cross-platform analytics (YouTube, TikTok, Instagram)
+- Centralized performance view
 
-8. **Process Metrics**
-   Build daily aggregates in `daily_metrics` and compute day-over-day growth.
+### Video-Level Insights
+- Views, likes, comments, shares
+- Engagement rate calculation
+- Watch time and retention
 
-9. **Dashboard + Alerts**
-   Serve dashboard and generate alerts from configured thresholds.
+### Audience Analytics
+- Region distribution
+- Age and gender breakdowns
+- Audience behavior trends
 
-## Project Structure
+### Growth and Trend Intelligence
+- Daily performance tracking
+- Viral content detection
+- Top-performing content discovery
 
-- `tiktok_oauth_auth.py` - OAuth 2.0 login + authorization code exchange.
-- `src/tiktok_analytics/config.py` - environment/config loader.
-- `src/tiktok_analytics/db.py` - SQLite schema + init.
-- `src/tiktok_analytics/token_store.py` - token persistence + refresh checks.
-- `src/tiktok_analytics/tiktok_api.py` - TikTok API client.
-- `src/tiktok_analytics/pipeline.py` - full pipeline orchestration.
-- `src/tiktok_analytics/scheduler.py` - daily scheduler loop.
-- `src/tiktok_analytics/dashboard.py` - dashboard HTTP server.
-- `scripts/run_pipeline.py` - run one pipeline cycle.
-- `scripts/run_scheduler.py` - run daily scheduler.
-- `scripts/run_dashboard.py` - start dashboard.
+### Scalable Data Pipeline
+- Designed to handle 100K+ videos
+- Automated data ingestion and metric updates
 
-## First-Time Setup
+## High-Level Architecture
 
-1. Create `.env` from `.env.example` and fill required values.
-2. Run OAuth once:
-
-```bash
-python tiktok_oauth_auth.py
+```text
+Frontend (React)
+        |
+Backend API (FastAPI)
+        |
+Queue System (Amazon SQS)
+        |
+Worker Services
+        |
+Platform APIs (YouTube + TikTok + Instagram)
+        |
+PostgreSQL (RDS) + Redis (Cache)
 ```
 
-3. Run first pipeline manually:
+## Authentication
 
-```bash
-python scripts/run_pipeline.py
+OAuth 2.0 is used across all supported platforms:
+- YouTube -> Google OAuth
+- TikTok -> TikTok OAuth
+- Instagram -> Meta OAuth
+
+Tokens are stored securely and refreshed automatically for continuous data sync.
+
+## Data Pipeline Workflow
+
+```text
+Scheduler (Cron / Lambda)
+        |
+Fetch Video List (Incremental)
+        |
+Queue Jobs (Per Video)
+        |
+Workers Fetch Analytics
+        |
+Store in Database
+        |
+Precompute Metrics
+        |
+Serve via API
+        |
+Render Dashboard
 ```
 
-4. Start dashboard:
+## Database Design (Core Entities)
 
-```bash
-python scripts/run_dashboard.py
+### `videos`
+- `id`
+- `platform`
+- `title`
+- `publish_date`
+
+### `metrics_daily`
+- `video_id`
+- `date`
+- `views`
+- `likes`
+- `comments`
+- `shares`
+- `watch_time`
+
+### `audience_data`
+- `video_id`
+- `region`
+- `age`
+- `gender`
+
+## Analytics Computation
+
+Key computed metrics:
+
+- **Engagement Rate**: `(likes + comments + shares) / views`
+- **Growth Rate**: Daily change in views
+- **Top Content Ranking**: Weighted by engagement and watch time
+
+## Tech Stack
+
+### Backend
+- FastAPI
+- Python
+
+### Frontend
+- React
+
+### Cloud and Infrastructure
+- AWS Lambda
+- Amazon SQS
+- Amazon RDS (PostgreSQL)
+- Redis
+
+## Repository Structure
+
+```text
+creator_analytics/
+├─ apps/
+│  └─ frontend/                   # React dashboard app
+├─ services/
+│  ├─ api/                        # FastAPI backend (unified analytics API)
+│  │  ├─ src/creator_analytics_api/
+│  │  └─ tests/
+│  ├─ worker-tiktok/              # TikTok ingestion worker (current implementation)
+│  │  ├─ src/tiktok_analytics/
+│  │  ├─ scripts/
+│  │  └─ tests/
+│  └─ worker-analytics/           # Cross-platform metric computation worker
+│     ├─ src/worker_analytics/
+│     └─ tests/
+├─ packages/
+│  └─ shared-python/
+│     ├─ src/creator_shared/      # Shared models/utilities
+│     └─ tests/
+├─ infra/
+│  ├─ terraform/
+│  │  ├─ environments/dev/
+│  │  ├─ environments/prod/
+│  │  └─ modules/
+│  └─ aws/
+├─ docs/
+│  ├─ architecture/
+│  └─ api/
+├─ tests/
+│  └─ integration/
+├─ scripts/                       # Root helper scripts for local runs
+└─ configs/                       # Environment-specific app configs
 ```
 
-Open: `http://127.0.0.1:8050` (or configured host/port).
+## Deployment Architecture
 
-## Daily Operation
-
-Run scheduler process (keep it running in background/server):
-
-```bash
-python scripts/run_scheduler.py
+```text
+CloudFront (Frontend Hosting)
+        |
+API Gateway
+        |
+Backend (Lambda / ECS)
+        |
+SQS Queue
+        |
+Worker Services
+        |
+Amazon RDS (PostgreSQL) + Redis
 ```
 
-Scheduler behavior:
-- waits until `TIKTOK_SCHEDULE_TIME`
-- runs full pipeline
-- logs success/failure in `pipeline_runs`
-- persists refreshed tokens and new analytics snapshots
+## Project Goal
 
-## Environment Variables
-
-Required:
-- `TIKTOK_CLIENT_KEY`
-- `TIKTOK_CLIENT_SECRET`
-- `TIKTOK_REDIRECT_URI`
-
-Auth-related:
-- `TIKTOK_SCOPES` (default: `user.info.basic,video.list`)
-- `TIKTOK_DISABLE_AUTO_AUTH` (`0` or `1`)
-- `TIKTOK_OPEN_BROWSER` (`true`/`false`)
-- `TIKTOK_CALLBACK_TIMEOUT_SECONDS` (default: `180`)
-- `TIKTOK_TOKEN_PATH` (default: `tiktok_tokens.json`)
-
-Pipeline:
-- `TIKTOK_DB_PATH` (default: `data/tiktok_analytics.db`)
-- `TIKTOK_VIDEO_PAGE_LIMIT` (default: `5`)
-- `TIKTOK_VIDEO_PAGE_SIZE` (default: `20`)
-- `TIKTOK_REFRESH_BUFFER_SECONDS` (default: `300`)
-
-Scheduler + Dashboard:
-- `TIKTOK_SCHEDULE_TIME` (default: `03:30`)
-- `DASHBOARD_HOST` (default: `127.0.0.1`)
-- `DASHBOARD_PORT` (default: `8050`)
-
-Alerts:
-- `ALERT_MIN_TOTAL_VIEWS` (default: `100`)
-- `ALERT_GROWTH_DROP_PERCENT` (default: `30`)
-
-## Data Storage
-
-SQLite DB (default: `data/tiktok_analytics.db`) tables:
-- `tokens`
-- `videos`
-- `video_analytics`
-- `daily_metrics`
-- `alerts`
-- `pipeline_runs`
-
-## Alerts
-
-Implemented rules:
-- Warning if daily total views `< ALERT_MIN_TOTAL_VIEWS`
-- Critical if day-over-day views drop by `>= ALERT_GROWTH_DROP_PERCENT`
-
-## Troubleshooting
-
-- **No token found**
-  Run `python tiktok_oauth_auth.py` first.
-
-- **State mismatch during auth**
-  Restart auth flow and ensure callback URL is from same login attempt.
-
-- **Token refresh failure**
-  Re-run OAuth to issue fresh tokens.
-
-- **Empty analytics**
-  Verify app scopes/permissions in TikTok Developer Portal and update `TIKTOK_SCOPES`.
-
-## Security Notes
-
-- Never commit `.env` or token files.
-- Rotate client secret if exposed.
-- Keep redirect URI exactly matched between `.env` and TikTok app settings.
+Build a reliable, scalable intelligence layer for creator businesses so teams can move from manual reporting to real-time, data-driven content decisions.
