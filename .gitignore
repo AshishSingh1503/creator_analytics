@@ -1,0 +1,5 @@
+.env
+tiktok_tokens.json
+data/*.db
+__pycache__/
+*.pyc
