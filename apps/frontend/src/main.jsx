@@ -6,7 +6,12 @@ import "./styles.css";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 async function getJson(path) {
-  const response = await fetch(`${API_BASE}${path}`);
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`);
+  } catch (err) {
+    throw new Error(`Cannot reach API at ${API_BASE}. Start it with: npm run api`);
+  }
   if (!response.ok) {
     throw new Error(`API request failed: ${response.status}`);
   }
