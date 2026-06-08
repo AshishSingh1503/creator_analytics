@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "packages" / "share
 from creator_shared import analytics_db_path, get_connection, init_db, row_to_dict
 
 app = FastAPI(title='Creator Analytics API')
+SUPPORTED_PLATFORMS = ["youtube", "tiktok", "instagram"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,13 +56,31 @@ def analytics_summary() -> dict[str, object]:
         ).fetchone()
         views = int(totals["views"] or 0)
         engagement = int(totals["likes"] or 0) + int(totals["comments"] or 0) + int(totals["shares"] or 0)
-        platforms = [
-            row_to_dict(row)
+        platform_rows = {
+            row["platform"]: row_to_dict(row)
             for row in conn.execute(
-                "SELECT * FROM platform_daily_summary WHERE date=? ORDER BY views DESC",
+                "SELECT * FROM platform_daily_summary WHERE date=?",
                 (latest_date,),
             ).fetchall()
-        ]
+        }
+        platforms = []
+        for platform in SUPPORTED_PLATFORMS:
+            platforms.append(
+                platform_rows.get(
+                    platform,
+                    {
+                        "platform": platform,
+                        "date": latest_date,
+                        "videos": 0,
+                        "views": 0,
+                        "likes": 0,
+                        "comments": 0,
+                        "shares": 0,
+                        "watch_time": 0,
+                        "engagement_rate": 0,
+                    },
+                )
+            )
         return {
             "date": latest_date,
             "totals": {
@@ -75,6 +94,36 @@ def analytics_summary() -> dict[str, object]:
             "engagement_rate": (engagement / views) if views else 0,
             "platforms": platforms,
         }
+    finally:
+        conn.close()
+
+
+@app.get("/platforms/status")
+def platform_status() -> list[dict[str, object]]:
+    conn = _connection()
+    try:
+        rows = {
+            row["platform"]: row_to_dict(row)
+            for row in conn.execute(
+                """
+                SELECT v.platform, COUNT(DISTINCT v.id) AS videos, MAX(v.last_seen_at) AS last_seen_at,
+                       MAX(m.date) AS latest_metric_date
+                FROM videos v
+                LEFT JOIN metrics_daily m ON m.video_id = v.id
+                GROUP BY v.platform
+                """
+            ).fetchall()
+        }
+        return [
+            {
+                "platform": platform,
+                "configured": platform in rows,
+                "videos": int((rows.get(platform) or {}).get("videos") or 0),
+                "last_seen_at": (rows.get(platform) or {}).get("last_seen_at"),
+                "latest_metric_date": (rows.get(platform) or {}).get("latest_metric_date"),
+            }
+            for platform in SUPPORTED_PLATFORMS
+        ]
     finally:
         conn.close()
 

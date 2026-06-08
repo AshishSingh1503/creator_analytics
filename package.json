@@ -6,6 +6,12 @@
     "dev": "npm --prefix apps/frontend run dev",
     "build": "npm --prefix apps/frontend run build",
     "preview": "npm --prefix apps/frontend run preview",
-    "install:frontend": "npm --prefix apps/frontend install"
+    "install:frontend": "npm --prefix apps/frontend install",
+    "ingest:all": "python scripts/run_all_platforms.py",
+    "ingest:tiktok": "python scripts/run_pipeline.py",
+    "ingest:youtube": "python scripts/run_youtube_pipeline.py",
+    "ingest:instagram": "python scripts/run_instagram_pipeline.py",
+    "analytics": "python scripts/run_analytics_worker.py",
+    "api": "python scripts/run_api.py"
   }
 }

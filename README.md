@@ -131,14 +131,22 @@ npm run build
 
 The API runs at `http://127.0.0.1:8000` and the dashboard runs at `http://127.0.0.1:5173`.
 
-For real TikTok ingestion, configure `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET`, complete OAuth, then run:
+For real all-platform ingestion, copy `.env.example` to `.env`, configure the TikTok, YouTube, and Instagram credentials, complete TikTok OAuth, then run:
 
 ```bash
-python scripts/run_pipeline.py
-python scripts/run_analytics_worker.py
+npm run ingest:all
 ```
 
-The TikTok worker writes platform data into the same shared analytics tables consumed by the API and dashboard.
+The all-platform runner executes TikTok, YouTube, Instagram, then the analytics precompute worker. If a platform is missing credentials, that platform is reported as `skipped` while configured platforms still run.
+
+You can also run each platform independently:
+
+```bash
+npm run ingest:tiktok
+npm run ingest:youtube
+npm run ingest:instagram
+npm run analytics
+```
 
 ## Database Design (Core Entities)
 
@@ -200,6 +208,10 @@ creator_analytics/
 |   |   |-- src/tiktok_analytics/
 |   |   |-- scripts/
 |   |   `-- tests/
+|   |-- worker-youtube/             # YouTube Data API ingestion worker
+|   |   `-- src/youtube_analytics/
+|   |-- worker-instagram/           # Instagram Graph API ingestion worker
+|   |   `-- src/instagram_analytics/
 |   `-- worker-analytics/           # Cross-platform metric computation worker
 |       |-- src/worker_analytics/
 |       `-- tests/
