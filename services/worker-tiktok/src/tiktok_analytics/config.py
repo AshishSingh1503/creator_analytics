@@ -45,7 +45,7 @@ def load_settings() -> Settings:
     return Settings(
         client_key=_required("TIKTOK_CLIENT_KEY"),
         client_secret=_required("TIKTOK_CLIENT_SECRET"),
-        db_path=Path(os.getenv("TIKTOK_DB_PATH", "data/tiktok_analytics.db")),
+        db_path=Path(os.getenv("TIKTOK_DB_PATH", os.getenv("CREATOR_ANALYTICS_DB_PATH", "data/creator_analytics.db"))),
         token_json_path=Path(os.getenv("TIKTOK_TOKEN_PATH", "tiktok_tokens.json")),
         scopes=os.getenv("TIKTOK_SCOPES", "user.info.basic,video.list").strip() or "user.info.basic,video.list",
         page_limit=int(os.getenv("TIKTOK_VIDEO_PAGE_LIMIT", "5")),

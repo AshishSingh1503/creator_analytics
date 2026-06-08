@@ -94,6 +94,52 @@ Serve via API
 Render Dashboard
 ```
 
+## Local Development Flow
+
+This repository follows the README architecture with local SQLite standing in for PostgreSQL/RDS during development.
+
+1. Seed demo analytics data:
+
+```bash
+python -c "import sys; sys.path.insert(0, 'services/api/src'); from creator_analytics_api.main import seed_demo_data; print(seed_demo_data())"
+```
+
+2. Precompute platform summaries and top-content rankings:
+
+```bash
+python scripts/run_analytics_worker.py
+```
+
+3. Start the FastAPI service:
+
+```bash
+python scripts/run_api.py
+```
+
+4. Start the React dashboard:
+
+```bash
+npm run install:frontend
+npm run dev
+```
+
+Build the React dashboard from the repository root:
+
+```bash
+npm run build
+```
+
+The API runs at `http://127.0.0.1:8000` and the dashboard runs at `http://127.0.0.1:5173`.
+
+For real TikTok ingestion, configure `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET`, complete OAuth, then run:
+
+```bash
+python scripts/run_pipeline.py
+python scripts/run_analytics_worker.py
+```
+
+The TikTok worker writes platform data into the same shared analytics tables consumed by the API and dashboard.
+
 ## Database Design (Core Entities)
 
 ### `videos`
@@ -144,36 +190,36 @@ Key computed metrics:
 
 ```text
 creator_analytics/
-├─ apps/
-│  └─ frontend/                   # React dashboard app
-├─ services/
-│  ├─ api/                        # FastAPI backend (unified analytics API)
-│  │  ├─ src/creator_analytics_api/
-│  │  └─ tests/
-│  ├─ worker-tiktok/              # TikTok ingestion worker (current implementation)
-│  │  ├─ src/tiktok_analytics/
-│  │  ├─ scripts/
-│  │  └─ tests/
-│  └─ worker-analytics/           # Cross-platform metric computation worker
-│     ├─ src/worker_analytics/
-│     └─ tests/
-├─ packages/
-│  └─ shared-python/
-│     ├─ src/creator_shared/      # Shared models/utilities
-│     └─ tests/
-├─ infra/
-│  ├─ terraform/
-│  │  ├─ environments/dev/
-│  │  ├─ environments/prod/
-│  │  └─ modules/
-│  └─ aws/
-├─ docs/
-│  ├─ architecture/
-│  └─ api/
-├─ tests/
-│  └─ integration/
-├─ scripts/                       # Root helper scripts for local runs
-└─ configs/                       # Environment-specific app configs
+|-- apps/
+|   `-- frontend/                   # React dashboard app
+|-- services/
+|   |-- api/                        # FastAPI backend (unified analytics API)
+|   |   |-- src/creator_analytics_api/
+|   |   `-- tests/
+|   |-- worker-tiktok/              # TikTok ingestion worker (current implementation)
+|   |   |-- src/tiktok_analytics/
+|   |   |-- scripts/
+|   |   `-- tests/
+|   `-- worker-analytics/           # Cross-platform metric computation worker
+|       |-- src/worker_analytics/
+|       `-- tests/
+|-- packages/
+|   `-- shared-python/
+|       |-- src/creator_shared/      # Shared schema/utilities
+|       `-- tests/
+|-- infra/
+|   |-- terraform/
+|   |   |-- environments/dev/
+|   |   |-- environments/prod/
+|   |   `-- modules/
+|   `-- aws/
+|-- docs/
+|   |-- architecture/
+|   `-- api/
+|-- tests/
+|   `-- integration/
+|-- scripts/                        # Root helper scripts for local runs
+`-- configs/                        # Environment-specific app configs
 ```
 
 ## Deployment Architecture

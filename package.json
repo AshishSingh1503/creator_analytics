@@ -1,0 +1,11 @@
+{
+  "name": "creator-analytics-platform",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "npm --prefix apps/frontend run dev",
+    "build": "npm --prefix apps/frontend run build",
+    "preview": "npm --prefix apps/frontend run preview",
+    "install:frontend": "npm --prefix apps/frontend install"
+  }
+}

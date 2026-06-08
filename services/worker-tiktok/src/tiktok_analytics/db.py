@@ -27,10 +27,15 @@ def init_db(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE IF NOT EXISTS videos (
             video_id TEXT PRIMARY KEY,
+            id TEXT UNIQUE,
+            platform TEXT,
             title TEXT,
+            publish_date TEXT,
             create_time INTEGER,
             duration INTEGER,
+            source_url TEXT,
             share_url TEXT,
+            thumbnail_url TEXT,
             cover_image_url TEXT,
             last_seen_at TEXT NOT NULL
         );
@@ -74,4 +79,15 @@ def init_db(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    _ensure_column(conn, "videos", "id", "TEXT")
+    _ensure_column(conn, "videos", "platform", "TEXT")
+    _ensure_column(conn, "videos", "publish_date", "TEXT")
+    _ensure_column(conn, "videos", "source_url", "TEXT")
+    _ensure_column(conn, "videos", "thumbnail_url", "TEXT")
     conn.commit()
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")

@@ -1,11 +1,17 @@
 import json
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 from .config import Settings
 from .db import get_connection, init_db
 from .tiktok_api import TikTokApiError, chunked, list_videos, query_videos, refresh_access_token
 from .token_store import get_tokens, read_token_file, token_needs_refresh, upsert_tokens, write_token_file
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "packages" / "shared-python" / "src"))
+
+from creator_shared import init_db as init_shared_db
 
 
 def _utc_now_iso() -> str:
@@ -118,6 +124,94 @@ def _insert_analytics_snapshot(conn, videos: List[Dict[str, object]], fetched_at
                 int(video.get("share_count") or 0),
                 int(video.get("view_count") or 0),
             ),
+        )
+
+
+def _sync_unified_analytics(conn, videos: List[Dict[str, object]], metric_date: str, fetched_at: str) -> None:
+    init_shared_db(conn)
+    video_columns = {row["name"] for row in conn.execute("PRAGMA table_info(videos)").fetchall()}
+    has_tiktok_video_id = "video_id" in video_columns
+
+    for video in videos:
+        raw_id = str(video.get("id", "")).strip()
+        if not raw_id:
+            continue
+
+        video_id = f"tiktok:{raw_id}"
+        create_time = int(video.get("create_time") or 0)
+        publish_date = (
+            datetime.fromtimestamp(create_time, timezone.utc).date().isoformat()
+            if create_time
+            else None
+        )
+        views = int(video.get("view_count") or 0)
+        likes = int(video.get("like_count") or 0)
+        comments = int(video.get("comment_count") or 0)
+        shares = int(video.get("share_count") or 0)
+        engagement_rate = ((likes + comments + shares) / views) if views else 0.0
+
+        if has_tiktok_video_id:
+            conn.execute(
+                """
+                INSERT INTO videos (
+                    video_id, id, platform, title, publish_date, source_url, thumbnail_url, last_seen_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(video_id) DO UPDATE SET
+                    id=excluded.id,
+                    platform=excluded.platform,
+                    title=excluded.title,
+                    publish_date=excluded.publish_date,
+                    source_url=excluded.source_url,
+                    thumbnail_url=excluded.thumbnail_url,
+                    last_seen_at=excluded.last_seen_at
+                """,
+                (
+                    raw_id,
+                    video_id,
+                    "tiktok",
+                    str(video.get("title", "")),
+                    publish_date,
+                    str(video.get("share_url", "")),
+                    str(video.get("cover_image_url", "")),
+                    fetched_at,
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO videos (id, platform, title, publish_date, source_url, thumbnail_url, last_seen_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    title=excluded.title,
+                    publish_date=excluded.publish_date,
+                    source_url=excluded.source_url,
+                    thumbnail_url=excluded.thumbnail_url,
+                    last_seen_at=excluded.last_seen_at
+                """,
+                (
+                    video_id,
+                    "tiktok",
+                    str(video.get("title", "")),
+                    publish_date,
+                    str(video.get("share_url", "")),
+                    str(video.get("cover_image_url", "")),
+                    fetched_at,
+                ),
+            )
+        conn.execute(
+            """
+            INSERT INTO metrics_daily (
+                video_id, date, views, likes, comments, shares, watch_time, engagement_rate, growth_rate
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(video_id, date) DO UPDATE SET
+                views=excluded.views,
+                likes=excluded.likes,
+                comments=excluded.comments,
+                shares=excluded.shares,
+                watch_time=excluded.watch_time,
+                engagement_rate=excluded.engagement_rate
+            """,
+            (video_id, metric_date, views, likes, comments, shares, 0, engagement_rate, None),
         )
 
 
@@ -252,6 +346,7 @@ def run_pipeline(settings: Settings) -> Dict[str, object]:
         _insert_analytics_snapshot(conn, videos_for_storage, fetched_at)
 
         metric_date = _today_utc()
+        _sync_unified_analytics(conn, videos_for_storage, metric_date, fetched_at)
         metrics = _store_daily_metrics(conn, metric_date, videos_for_storage, fetched_at)
         alerts = _evaluate_alerts(conn, settings, metric_date, metrics)
 
